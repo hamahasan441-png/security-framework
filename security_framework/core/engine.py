@@ -29,7 +29,7 @@ class AssessmentEngine:
     def __init__(self, config: Config) -> None:
         self.config = config
         audit_path = Path(config.audit.path) if config.audit.path else None
-        self.audit = AuditLogger(path=audit_path)
+        self.audit = AuditLogger(path=audit_path, echo=config.audit.echo)
         self.scope = ScopePolicy.from_config(config.scope)
         self.http = SafeHttpClient.from_config(scope=self.scope, audit=self.audit, config=config.http)
         self.checks = load_checks(config.plugins)
