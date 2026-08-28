@@ -4,6 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from threading import Lock
+from typing import Mapping
 from urllib.parse import urljoin
 
 import requests
@@ -46,6 +47,10 @@ class SafeHttpClient:
     Every request is scope-checked, rate-limited, timeout-bounded, TLS-verified by
     default, and audited. Redirects are followed manually so each hop is checked
     against scope before another connection is opened.
+
+    POST is disabled by default and must be explicitly enabled for staging/lab
+    assessments. POST requests are not retried automatically because they can be
+    state-changing.
     """
 
     def __init__(
@@ -60,6 +65,7 @@ class SafeHttpClient:
         requests_per_second: float = 2.0,
         user_agent: str = "InternalSecurityFramework/0.2 (+security-team)",
         max_response_bytes: int = 2_000_000,
+        allow_post_requests: bool = False,
     ) -> None:
         self.scope = scope
         self.audit = audit
@@ -67,6 +73,7 @@ class SafeHttpClient:
         self.verify_tls = verify_tls
         self.max_redirects = max_redirects
         self.max_response_bytes = max_response_bytes
+        self.allow_post_requests = allow_post_requests
         self.rate_limiter = RateLimiter(requests_per_second)
         self.session = requests.Session()
         self.session.headers.update(
@@ -93,6 +100,14 @@ class SafeHttpClient:
 
         if not verify_tls:
             self.audit.log({"event": "http_tls_verification_disabled", "severity": "warning"})
+        if allow_post_requests:
+            self.audit.log(
+                {
+                    "event": "http_post_requests_enabled",
+                    "severity": "notice",
+                    "message": "POST checks should only be used against staging or explicitly approved targets.",
+                }
+            )
 
     @classmethod
     def from_config(cls, scope: ScopePolicy, audit: AuditLogger, config: object) -> "SafeHttpClient":
@@ -107,6 +122,7 @@ class SafeHttpClient:
             requests_per_second=float(getattr(config, "requests_per_second", 2.0)),
             user_agent=str(getattr(config, "user_agent", "InternalSecurityFramework/0.2 (+security-team)")),
             max_response_bytes=int(getattr(config, "max_response_bytes", 2_000_000)),
+            allow_post_requests=bool(getattr(config, "allow_post_requests", False)),
         )
 
     def get(self, url: str, **kwargs: object) -> requests.Response:
@@ -115,10 +131,45 @@ class SafeHttpClient:
     def head(self, url: str, **kwargs: object) -> requests.Response:
         return self.request("HEAD", url, **kwargs)
 
+    def options(self, url: str, **kwargs: object) -> requests.Response:
+        return self.request("OPTIONS", url, **kwargs)
+
+    def post_form(
+        self,
+        url: str,
+        data: Mapping[str, object],
+        **kwargs: object,
+    ) -> requests.Response:
+        """Submit a form body when POST checks are explicitly enabled.
+
+        The request body is never written to the audit log. Only field names are
+        recorded so secrets or credentials are not captured accidentally.
+        """
+
+        self.audit.log(
+            {
+                "event": "http_post_form_attempt",
+                "url": url,
+                "field_names": sorted(str(key) for key in data.keys()),
+            }
+        )
+        return self.request("POST", url, data=dict(data), **kwargs)
+
     def request(self, method: str, url: str, **kwargs: object) -> requests.Response:
         method = method.upper()
-        if method not in {"GET", "HEAD", "OPTIONS"}:
-            raise ValueError(f"SafeHttpClient only permits read-only HTTP methods, got {method}")
+        allowed_methods = {"GET", "HEAD", "OPTIONS"}
+        if self.allow_post_requests:
+            allowed_methods.add("POST")
+        if method not in allowed_methods:
+            if method == "POST":
+                self.audit.log(
+                    {
+                        "event": "http_post_blocked",
+                        "url": url,
+                        "reason": "POST requests are disabled in HttpConfig.allow_post_requests",
+                    }
+                )
+            raise ValueError(f"SafeHttpClient does not permit HTTP method {method}")
 
         request_id = uuid.uuid4().hex
         self._validate_or_audit_block(request_id, url)
