@@ -1,19 +1,29 @@
+run_mode: "safe_production"
+
 targets:
-  - url: "https://example.com/"
+  - name: "example"
+    url: "https://example.com/"
 
 scope:
   allowed_domains:
     - "example.com"
   allowed_cidrs: []
   allow_private_ranges: false
+  allow_redirects: true
 
 http:
   timeout_seconds: 10
   verify_tls: true
   max_redirects: 3
   max_retries: 2
+  retry_backoff_seconds: 0.35
   requests_per_second: 2
-  user_agent: "InternalSecurityFramework/0.1 (+security-team)"
+  user_agent: "InternalSecurityFramework/0.2 (+security-team)"
+  max_response_bytes: 2000000
+
+audit:
+  path: "reports/audit.jsonl"
+  echo: false
 
 crawler:
   enabled: true
