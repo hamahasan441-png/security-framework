@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from security_framework.core.audit import AuditLogger
 from security_framework.core.config import Config
@@ -27,42 +28,47 @@ class AssessmentResult:
 class AssessmentEngine:
     def __init__(self, config: Config) -> None:
         self.config = config
-        self.audit = AuditLogger()
-        self.scope = ScopePolicy(
-            allowed_domains=set(config.scope.allowed_domains),
-            allowed_cidrs=set(config.scope.allowed_cidrs),
-            allow_private_ranges=config.scope.allow_private_ranges,
-        )
-        self.http = SafeHttpClient(
-            scope=self.scope,
-            audit=self.audit,
-            timeout_seconds=config.http.timeout_seconds,
-            verify_tls=config.http.verify_tls,
-            max_retries=config.http.max_retries,
-            max_redirects=config.http.max_redirects,
-            requests_per_second=config.http.requests_per_second,
-            user_agent=config.http.user_agent,
-        )
+        audit_path = Path(config.audit.path) if config.audit.path else None
+        self.audit = AuditLogger(path=audit_path)
+        self.scope = ScopePolicy.from_config(config.scope)
+        self.http = SafeHttpClient.from_config(scope=self.scope, audit=self.audit, config=config.http)
         self.checks = load_checks(config.plugins)
 
     def run(self) -> AssessmentResult:
+        self.audit.log(
+            {
+                "event": "assessment_started",
+                "run_mode": self.config.run_mode,
+                "targets": [target.url for target in self.config.targets],
+                "plugins": self.config.plugins,
+            }
+        )
         result = AssessmentResult()
         for target in self.config.targets:
             self.scope.validate_url(target.url)
             if self.config.crawler.enabled:
-                crawler = SafeCrawler(
-                    base_url=target.url,
-                    http=self.http,
-                    max_depth=self.config.crawler.max_depth,
-                    max_urls=self.config.crawler.max_urls,
-                    respect_robots_txt=self.config.crawler.respect_robots_txt,
-                    safe_wordlist=self.config.crawler.safe_wordlist,
-                )
-                result.discovered_urls[target.url] = sorted(crawler.crawl())
+                crawler = SafeCrawler.from_config(base_url=target.url, http=self.http, config=self.config.crawler)
+                crawl_result = crawler.crawl_with_details()
+                result.discovered_urls[target.url] = sorted(crawl_result.discovered_urls)
+
             context = CheckContext(target_url=target.url, http=self.http)
             for check in self.checks:
                 self.audit.log({"event": "check_start", "check_id": check.id, "target": target.url})
                 findings = check.run(context)
                 result.findings.extend(findings)
-                self.audit.log({"event": "check_end", "check_id": check.id, "target": target.url, "findings": len(findings)})
+                self.audit.log(
+                    {
+                        "event": "check_end",
+                        "check_id": check.id,
+                        "target": target.url,
+                        "findings": len(findings),
+                    }
+                )
+        self.audit.log(
+            {
+                "event": "assessment_finished",
+                "finding_count": len(result.findings),
+                "discovered_target_count": len(result.discovered_urls),
+            }
+        )
         return result
