@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
-from typing import Any, Literal
+from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 import requests
@@ -99,6 +99,9 @@ class FormParser(HTMLParser):
     _method: HttpMethod = "GET"
     _action_url: str = ""
     _fields: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        HTMLParser.__init__(self)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = {key.lower(): value or "" for key, value in attrs}
