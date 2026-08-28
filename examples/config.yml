@@ -2,7 +2,7 @@ run_mode: "safe_production"
 
 targets:
   - name: "example"
-    url: "https://example.com/"
+    url: "https://example.com/?q=test"
 
 scope:
   allowed_domains:
@@ -43,3 +43,4 @@ crawler:
 plugins:
   - "security_framework.plugins.security_headers.SecurityHeadersCheck"
   - "security_framework.plugins.sqli_detector.SQLInjectionDetector"
+  - "security_framework.plugins.command_injection_detector.CommandInjectionDetector"
