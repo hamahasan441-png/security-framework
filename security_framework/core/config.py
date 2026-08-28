@@ -57,6 +57,7 @@ class HttpConfig:
     requests_per_second: float = 2.0
     user_agent: str = "InternalSecurityFramework/0.2 (+security-team)"
     max_response_bytes: int = 2_000_000
+    allow_post_requests: bool = False
 
     def __post_init__(self) -> None:
         if self.timeout_seconds <= 0 or self.timeout_seconds > 120:
@@ -71,6 +72,8 @@ class HttpConfig:
             raise ConfigError("http.requests_per_second must be between 0 and 50")
         if self.max_response_bytes < 1_024:
             raise ConfigError("http.max_response_bytes must be at least 1024")
+        if not isinstance(self.allow_post_requests, bool):
+            raise ConfigError("http.allow_post_requests must be true or false")
         if not self.verify_tls:
             # Allowed for lab use, but callers should log this clearly.
             pass
