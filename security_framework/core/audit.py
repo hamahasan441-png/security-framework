@@ -15,7 +15,7 @@ class AuditLogger:
     path: Path | None = None
 
     def log(self, event: dict[str, Any]) -> None:
-        safe_event = {key: redact(value) for key, value in event.items()}
+        safe_event: dict[str, Any] = {key: redact(value) for key, value in event.items()}
         safe_event["timestamp"] = time.time()
         body = json.dumps(safe_event, sort_keys=True, ensure_ascii=False)
         safe_event["event_hash"] = hashlib.sha256(body.encode("utf-8")).hexdigest()

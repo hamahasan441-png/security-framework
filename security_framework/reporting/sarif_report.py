@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from security_framework.core.engine import AssessmentResult
 
 
 def write_sarif_report(result: AssessmentResult, path: Path) -> None:
-    rules = {}
-    sarif_results = []
+    rules: dict[str, dict[str, Any]] = {}
+    sarif_results: list[dict[str, Any]] = []
     for finding in result.findings:
         rule_id = finding.cwe or finding.title.lower().replace(" ", "-")[:80]
         rules[rule_id] = {
@@ -26,7 +27,7 @@ def write_sarif_report(result: AssessmentResult, path: Path) -> None:
                 "locations": [{"physicalLocation": {"artifactLocation": {"uri": finding.asset}}}],
             }
         )
-    doc = {
+    doc: dict[str, Any] = {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
         "runs": [
