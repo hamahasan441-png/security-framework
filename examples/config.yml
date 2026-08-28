@@ -20,6 +20,8 @@ http:
   requests_per_second: 2
   user_agent: "InternalSecurityFramework/0.2 (+security-team)"
   max_response_bytes: 2000000
+  # Keep false for production. Set true only for authorized staging/lab form testing.
+  allow_post_requests: false
 
 audit:
   path: "reports/audit.jsonl"
@@ -40,3 +42,4 @@ crawler:
 
 plugins:
   - "security_framework.plugins.security_headers.SecurityHeadersCheck"
+  - "security_framework.plugins.sqli_detector.SQLInjectionDetector"
