@@ -12,17 +12,20 @@ from security_framework.core.redaction import redact
 
 @dataclass
 class AuditLogger:
+    """Append-only JSONL audit logger with automatic secret redaction."""
+
     path: Path | None = None
+    echo: bool = False
 
     def log(self, event: dict[str, Any]) -> None:
         safe_event: dict[str, Any] = {key: redact(value) for key, value in event.items()}
         safe_event["timestamp"] = time.time()
-        body = json.dumps(safe_event, sort_keys=True, ensure_ascii=False)
-        safe_event["event_hash"] = hashlib.sha256(body.encode("utf-8")).hexdigest()
-        line = json.dumps(safe_event, sort_keys=True, ensure_ascii=False)
+        hash_body = json.dumps(safe_event, sort_keys=True, ensure_ascii=False, default=str)
+        safe_event["event_hash"] = hashlib.sha256(hash_body.encode("utf-8")).hexdigest()
+        line = json.dumps(safe_event, sort_keys=True, ensure_ascii=False, default=str)
         if self.path:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(line + "\n")
-        else:
+        if self.echo or not self.path:
             print(line)
