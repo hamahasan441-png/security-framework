@@ -1,0 +1,32 @@
+targets:
+  - url: "https://example.com/"
+
+scope:
+  allowed_domains:
+    - "example.com"
+  allowed_cidrs: []
+  allow_private_ranges: false
+
+http:
+  timeout_seconds: 10
+  verify_tls: true
+  max_redirects: 3
+  max_retries: 2
+  requests_per_second: 2
+  user_agent: "InternalSecurityFramework/0.1 (+security-team)"
+
+crawler:
+  enabled: true
+  max_depth: 1
+  max_urls: 25
+  respect_robots_txt: true
+  safe_wordlist:
+    - "/"
+    - "/robots.txt"
+    - "/sitemap.xml"
+    - "/health"
+    - "/status"
+    - "/login"
+
+plugins:
+  - "security_framework.plugins.security_headers.SecurityHeadersCheck"
